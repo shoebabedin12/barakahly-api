@@ -8,6 +8,7 @@ import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { BrandsModule } from './brands/brands.module.js';
 import { CategoriesModule } from './categories/categories.module.js';
+import { CategoryLandingsModule } from './category-landings/category-landings.module.js';
 import { CheckoutModule } from './checkout/checkout.module.js';
 import { ColorsModule } from './colors/colors.module.js';
 import { DashboardModule } from './dashboard/dashboard.module.js';
@@ -34,8 +35,10 @@ import { SizesModule } from './sizes/sizes.module.js';
         password: config.get<string>('DB_PASSWORD', ''),
         database: config.get<string>('DB_DATABASE', 'barakahly'),
         autoLoadEntities: true,
-        // This database's schema is owned by the Laravel app's migrations
-        // (barakahly-commerce). TypeORM must never alter it here.
+        // The existing tables' schema is owned by the Laravel app's
+        // migrations. Tables this service adds (e.g. category_landing_pages)
+        // come from its own migrations in src/database/migrations, run with
+        // `npm run migration:run`. TypeORM must never auto-alter the schema.
         synchronize: false,
       }),
     }),
@@ -45,6 +48,7 @@ import { SizesModule } from './sizes/sizes.module.js';
     PagesModule,
     AdminAuthModule,
     CategoriesModule,
+    CategoryLandingsModule,
     BrandsModule,
     ColorsModule,
     SizesModule,
