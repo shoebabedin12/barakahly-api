@@ -6,3 +6,7 @@ coverage/
 .vscode/
 .idea/
 *.tsbuildinfo
+
+# Local env backups (contain secrets)
+.env.*
+!.env.example

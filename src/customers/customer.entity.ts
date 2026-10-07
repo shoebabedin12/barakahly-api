@@ -15,6 +15,14 @@ export class Customer {
   @Column({ type: 'varchar', nullable: true })
   email: string | null;
 
+  /** Profile photo, relative to the public storage disk (avatars/...). */
+  @Column({ type: 'varchar', nullable: true })
+  avatar: string | null;
+
+  /** Bcrypt hash (Laravel's `hashed` cast). Never selected unless asked for. */
+  @Column({ type: 'varchar', nullable: true, select: false })
+  password: string | null;
+
   @Column({ type: 'text', nullable: true })
   address: string | null;
 
@@ -26,4 +34,7 @@ export class Customer {
 
   @Column({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;
+
+  @Column({ name: 'updated_at', type: 'timestamp' })
+  updatedAt: Date;
 }

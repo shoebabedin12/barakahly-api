@@ -14,4 +14,10 @@ export class ShippingZone {
 
   @Column({ type: 'boolean', default: true })
   status: boolean;
+
+  @Column({ name: 'created_at', type: 'timestamp', nullable: true })
+  createdAt: Date | null;
+
+  @Column({ name: 'updated_at', type: 'timestamp', nullable: true })
+  updatedAt: Date | null;
 }

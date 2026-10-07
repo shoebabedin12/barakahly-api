@@ -54,6 +54,9 @@ export class Order {
   @Column({ name: 'payment_date', type: 'date', nullable: true })
   paymentDate: string | null;
 
+  @Column({ name: 'coupon_id', type: 'int', nullable: true })
+  couponId: number | null;
+
   @Column({ name: 'coupon_code', type: 'varchar', nullable: true })
   couponCode: string | null;
 
@@ -88,6 +91,9 @@ export class Order {
 
   @Column({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;
+
+  @Column({ name: 'updated_at', type: 'timestamp' })
+  updatedAt: Date;
 
   @OneToMany(() => OrderItem, (item) => item.order)
   items: Relation<OrderItem>[];

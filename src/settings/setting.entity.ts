@@ -44,6 +44,15 @@ export class Setting {
   @Column({ type: 'varchar', nullable: true })
   facebook: string | null;
 
+  @Column({ name: 'facebook_pixel_id', type: 'varchar', nullable: true })
+  facebookPixelId: string | null;
+
+  @Column({ name: 'clarity_project_id', type: 'varchar', nullable: true })
+  clarityProjectId: string | null;
+
+  @Column({ name: 'gtm_id', type: 'varchar', nullable: true })
+  gtmId: string | null;
+
   @Column({ type: 'varchar', nullable: true })
   instagram: string | null;
 
@@ -85,4 +94,7 @@ export class Setting {
 
   @Column({ name: 'mail_from_name', type: 'varchar', nullable: true })
   mailFromName: string | null;
+
+  @Column({ name: 'updated_at', type: 'timestamp', nullable: true })
+  updatedAt: Date | null;
 }

@@ -17,7 +17,10 @@ export class SettingsService {
    * credentials).
    */
   async getPublicSettings() {
-    const setting = await this.settings.findOne({ where: {}, order: { id: 'ASC' as const } });
+    const setting = await this.settings.findOne({
+      where: {},
+      order: { id: 'ASC' as const },
+    });
 
     return {
       site_name: setting?.siteName ?? null,
@@ -36,6 +39,10 @@ export class SettingsService {
       meta_description: setting?.metaDescription ?? null,
       flash_deal_ends_at: setting?.flashDealEndsAt?.toISOString() ?? null,
       maintenance_mode: Boolean(setting?.maintenanceMode),
+      // Public tracking ids, so the storefront can load Pixel / GTM / Clarity.
+      facebook_pixel_id: setting?.facebookPixelId ?? null,
+      gtm_id: setting?.gtmId ?? null,
+      clarity_project_id: setting?.clarityProjectId ?? null,
     };
   }
 }

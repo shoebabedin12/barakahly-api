@@ -9,6 +9,8 @@ interface SendMailInput {
   subject: string;
   html: string;
   replyTo?: string;
+  /** Throw instead of silently skipping when no SMTP server is configured. */
+  required?: boolean;
 }
 
 /**
@@ -24,27 +26,52 @@ export class MailService {
     private readonly settings: Repository<Setting>,
   ) {}
 
-  async send({ to, subject, html, replyTo }: SendMailInput): Promise<void> {
-    const setting = await this.settings.findOne({ where: {}, order: { id: 'ASC' } });
+  async send({
+    to,
+    subject,
+    html,
+    replyTo,
+    required,
+  }: SendMailInput): Promise<void> {
+    const setting = await this.settings.findOne({
+      where: {},
+      order: { id: 'ASC' },
+    });
 
     const host = setting?.mailHost || process.env.MAIL_HOST;
-    if (!host) return; // no mail configured anywhere - silently no-op, same as Laravel would fail on send
+    if (!host) {
+      // No mail configured anywhere: optional mail is skipped, but mail the
+      // caller depends on (like a checkout code) must fail visibly.
+      if (required) throw new Error('No SMTP server is configured.');
+      return;
+    }
 
     const port = Number(setting?.mailPort || process.env.MAIL_PORT || 587);
-    const encryption = (setting?.mailEncryption || process.env.MAIL_SCHEME || '').toLowerCase();
-    const secure = encryption.includes('ssl') || encryption.includes('smtps') || port === 465;
+    const encryption = (
+      setting?.mailEncryption ||
+      process.env.MAIL_SCHEME ||
+      ''
+    ).toLowerCase();
+    const secure =
+      encryption.includes('ssl') ||
+      encryption.includes('smtps') ||
+      port === 465;
 
     const username = setting?.mailUsername || process.env.MAIL_USERNAME;
     const password = setting?.mailPassword || process.env.MAIL_PASSWORD;
 
-    const fromAddress = setting?.mailFromAddress || process.env.MAIL_FROM_ADDRESS || username;
-    const fromName = setting?.mailFromName || process.env.MAIL_FROM_NAME || setting?.siteName;
+    const fromAddress =
+      setting?.mailFromAddress || process.env.MAIL_FROM_ADDRESS || username;
+    const fromName =
+      setting?.mailFromName || process.env.MAIL_FROM_NAME || setting?.siteName;
 
     const transport = nodemailer.createTransport({
       host,
       port,
       secure,
-      auth: username ? { user: username, pass: password ?? undefined } : undefined,
+      auth: username
+        ? { user: username, pass: password ?? undefined }
+        : undefined,
     });
 
     await transport.sendMail({

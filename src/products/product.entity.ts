@@ -46,10 +46,22 @@ export class Product {
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   price: string;
 
-  @Column({ name: 'discount_price', type: 'decimal', precision: 10, scale: 2, nullable: true })
+  @Column({
+    name: 'discount_price',
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+  })
   discountPrice: string | null;
 
-  @Column({ name: 'cost_price', type: 'decimal', precision: 10, scale: 2, nullable: true })
+  @Column({
+    name: 'cost_price',
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+  })
   costPrice: string | null;
 
   @Column({ type: 'int', default: 0 })
@@ -66,6 +78,9 @@ export class Product {
 
   @Column({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;
+
+  @Column({ name: 'updated_at', type: 'timestamp', nullable: true })
+  updatedAt: Date | null;
 
   @OneToMany(() => ProductImage, (image) => image.product)
   images: Relation<ProductImage>[];

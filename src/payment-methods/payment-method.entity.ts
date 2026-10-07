@@ -30,4 +30,10 @@ export class PaymentMethod {
 
   @Column({ name: 'receiving_number', type: 'text', nullable: true })
   receivingNumber: string | null;
+
+  @Column({ name: 'created_at', type: 'timestamp', nullable: true })
+  createdAt: Date | null;
+
+  @Column({ name: 'updated_at', type: 'timestamp', nullable: true })
+  updatedAt: Date | null;
 }

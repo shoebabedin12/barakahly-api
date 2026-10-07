@@ -53,4 +53,10 @@ export class OrderItem {
 
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   subtotal: string;
+
+  @Column({ name: 'created_at', type: 'timestamp' })
+  createdAt: Date;
+
+  @Column({ name: 'updated_at', type: 'timestamp' })
+  updatedAt: Date;
 }

@@ -17,5 +17,7 @@ export default new DataSource({
   database: process.env.DB_DATABASE ?? 'barakahly',
   // Laravel already uses the `migrations` table name in this database.
   migrationsTableName: 'typeorm_migrations',
+  timezone: 'Z',
+  bigNumberStrings: false,
   migrations: [new URL('./migrations/*.js', import.meta.url).pathname],
 });
