@@ -135,3 +135,9 @@ export class PasskeyLoginDto {
   @IsString()
   guest_token?: string | null;
 }
+
+export class DeleteAccountDto {
+  @IsOptional()
+  @IsString(string('password'))
+  password?: string;
+}

@@ -24,6 +24,7 @@ import {
 } from './customer-auth.guard.js';
 import { CustomerAuthService } from './customer-auth.service.js';
 import {
+  DeleteAccountDto,
   LoginDto,
   PasskeyLoginDto,
   PasskeyRegisterDto,
@@ -116,6 +117,15 @@ export class CustomerAuthController {
     @UploadedFile() avatar?: Express.Multer.File,
   ) {
     return this.auth.setAvatar(customer, avatar);
+  }
+
+  @Delete('account')
+  @UseGuards(CustomerAuthGuard)
+  deleteAccount(
+    @CurrentCustomer() customer: Customer,
+    @Body() dto: DeleteAccountDto,
+  ) {
+    return this.auth.deleteAccount(customer, dto.password);
   }
 
   @Delete('avatar')

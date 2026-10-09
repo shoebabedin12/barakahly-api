@@ -20,7 +20,11 @@ import type {
   UpdateProfileDto,
 } from './dto/customer-auth.dto.js';
 import { passwordErrors } from './password-rules.js';
-import { SanctumTokenService } from './sanctum-token.service.js';
+import { PersonalAccessToken } from './personal-access-token.entity.js';
+import {
+  CUSTOMER_TOKENABLE_TYPE,
+  SanctumTokenService,
+} from './sanctum-token.service.js';
 
 const BCRYPT_ROUNDS = 12;
 
@@ -224,6 +228,35 @@ export class CustomerAuthService {
         await this.customers.findOneByOrFail({ id: customer.id }),
       ),
     };
+  }
+
+  /**
+   * Deletes the customer's account (required by the app stores). Cart,
+   * wishlist, reviews and passkeys go with it via their foreign keys; orders
+   * stay for the shop's records but lose the link to the person.
+   */
+  async deleteAccount(customer: Customer, password: string | undefined) {
+    const row = await this.customers
+      .createQueryBuilder('customer')
+      .addSelect('customer.password')
+      .where('customer.id = :id', { id: customer.id })
+      .getOne();
+    if (row?.password) {
+      const valid = password ? await bcrypt.compare(password, row.password) : false;
+      if (!valid) {
+        throw LaravelValidationException.field('password', 'The password is incorrect.');
+      }
+    }
+
+    await this.customers.manager.transaction(async (manager) => {
+      await manager.delete(PersonalAccessToken, {
+        tokenableType: CUSTOMER_TOKENABLE_TYPE,
+        tokenableId: customer.id,
+      });
+      await manager.delete(Customer, customer.id);
+    });
+    if (row?.avatar) await deletePublicFile(row.avatar);
+    return { message: 'Your account has been deleted.' };
   }
 
   async removeAvatar(customer: Customer) {
