@@ -3,10 +3,14 @@ import {
   Entity,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
+  type Relation,
 } from 'typeorm';
 import { Investment } from '../investments/investment.entity.js';
 import { Supplier } from '../suppliers/supplier.entity.js';
+import { PurchaseCost } from './purchase-cost.entity.js';
+import { PurchaseItem } from './purchase-item.entity.js';
 
 @Entity('purchases')
 export class Purchase {
@@ -53,6 +57,12 @@ export class Purchase {
   @ManyToOne(() => Investment, { nullable: true })
   @JoinColumn({ name: 'investment_id' })
   investment: Investment | null;
+
+  @OneToMany(() => PurchaseItem, (item) => item.purchase)
+  items: Relation<PurchaseItem>[];
+
+  @OneToMany(() => PurchaseCost, (cost) => cost.purchase)
+  costs: Relation<PurchaseCost>[];
 
   @Column({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;

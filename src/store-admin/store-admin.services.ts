@@ -1,3 +1,4 @@
+import { ActivityLogService, columnChanges } from '../activity-log/activity-log.service.js';
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Not, Repository } from 'typeorm';
@@ -22,6 +23,7 @@ import type {
 export class CouponsAdminService {
   constructor(
     @InjectRepository(Coupon) private readonly coupons: Repository<Coupon>,
+    private readonly activity: ActivityLogService,
   ) {}
 
   async findAll(page: number) {
@@ -78,16 +80,33 @@ export class CouponsAdminService {
     );
   }
 
-  create(dto: CouponAdminDto) {
-    return this.save(dto);
+  async create(dto: CouponAdminDto) {
+    const coupon = await this.save(dto);
+    await this.activity.record(
+      'created',
+      { model: 'Coupon', id: coupon.id, label: coupon.code },
+      `Created coupon "${coupon.code}"`,
+    );
+    return coupon;
   }
 
   async update(id: number, dto: CouponAdminDto) {
-    return this.save(dto, await this.findOne(id));
+    const existing = await this.findOne(id);
+    const before = { ...existing };
+    const coupon = await this.save(dto, existing);
+    await this.activity.record(
+      'updated',
+      { model: 'Coupon', id: coupon.id, label: coupon.code },
+      `Updated coupon "${coupon.code}"`,
+      columnChanges(this.coupons, before, coupon, ['updated_at']),
+    );
+    return coupon;
   }
 
   async remove(id: number) {
-    await this.coupons.delete((await this.findOne(id)).id);
+    const coupon = await this.findOne(id);
+    await this.coupons.delete(coupon.id);
+    await this.activity.record('deleted', null, `Deleted coupon "${coupon.code}"`);
   }
 }
 
@@ -387,6 +406,7 @@ type SettingTextField = keyof typeof SETTING_TEXT_FIELDS;
 export class SettingsAdminService {
   constructor(
     @InjectRepository(Setting) private readonly settings: Repository<Setting>,
+    private readonly activity: ActivityLogService,
   ) {}
 
   private async current() {
@@ -458,6 +478,7 @@ export class SettingsAdminService {
       throw new LaravelValidationException(errors);
 
     const setting = await this.current();
+    const before = { ...setting };
     const oldLogo = setting.siteLogo;
     const oldFavicon = setting.siteFavicon;
     const logo = files.logo?.[0];
@@ -477,6 +498,12 @@ export class SettingsAdminService {
       ...(favicon ? { siteFavicon: storedPath('branding', favicon) } : {}),
     });
     await this.settings.save(setting);
+    await this.activity.record(
+      'updated',
+      { model: 'Setting', id: setting.id },
+      'Updated site settings',
+      columnChanges(this.settings, before, setting, ['mail_password', 'updated_at']),
+    );
 
     if (logo) await deletePublicFile(oldLogo);
     if (favicon) await deletePublicFile(oldFavicon);

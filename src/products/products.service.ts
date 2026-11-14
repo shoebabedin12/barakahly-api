@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { DataSource, In, Not, Repository } from 'typeorm';
+import { ActivityLogService, columnChanges } from '../activity-log/activity-log.service.js';
 import { slugify } from '../common/slug.js';
 import { ProductImage } from './product-image.entity.js';
 import { ProductVariant } from './product-variant.entity.js';
@@ -29,6 +30,7 @@ export class ProductsService {
     @InjectRepository(ProductVariant)
     private readonly variants: Repository<ProductVariant>,
     private readonly dataSource: DataSource,
+    private readonly activity: ActivityLogService,
   ) {}
 
   async findAll(query: ProductListQuery) {
@@ -108,8 +110,15 @@ export class ProductsService {
         variantImages,
       );
 
-      return product.id;
-    }).then((id) => this.findOne(id));
+      return product;
+    }).then(async (product) => {
+      await this.activity.record(
+        'created',
+        { model: 'Product', id: product.id, label: product.name },
+        `Created product "${product.name}"`,
+      );
+      return this.findOne(product.id);
+    });
   }
 
   async update(
@@ -121,6 +130,7 @@ export class ProductsService {
     const product = await this.products.findOne({ where: { id } });
     if (!product) throw new NotFoundException('Product not found.');
 
+    const before = { ...product };
     return this.dataSource.transaction(async (manager) => {
       product.categoryId = input.categoryId;
       product.brandId = input.brandId;
@@ -146,7 +156,15 @@ export class ProductsService {
       );
 
       return id;
-    }).then((productId) => this.findOne(productId));
+    }).then(async (productId) => {
+      await this.activity.record(
+        'updated',
+        { model: 'Product', id: productId, label: product.name },
+        `Updated product "${product.name}"`,
+        columnChanges(this.products, before, product, ['updated_at']),
+      );
+      return this.findOne(productId);
+    });
   }
 
   async remove(id: number) {
@@ -155,6 +173,7 @@ export class ProductsService {
 
     await Promise.all(product.images.map((image) => this.deleteImageFile(image.image)));
     await this.products.remove(product);
+    await this.activity.record('deleted', null, `Deleted product "${product.name}" (ID: ${id})`);
   }
 
   async bulkAction(ids: number[], action: 'delete' | 'active' | 'inactive') {
@@ -162,15 +181,20 @@ export class ProductsService {
       const targets = await this.products.find({ where: { id: In(ids) }, relations: { images: true } });
       await Promise.all(targets.flatMap((p) => p.images.map((img) => this.deleteImageFile(img.image))));
       await this.products.remove(targets);
-      return;
+    } else {
+      await this.products
+        .createQueryBuilder()
+        .update(Product)
+        .set({ status: action === 'active' })
+        .whereInIds(ids)
+        .execute();
     }
 
-    await this.products
-      .createQueryBuilder()
-      .update(Product)
-      .set({ status: action === 'active' })
-      .whereInIds(ids)
-      .execute();
+    await this.activity.record(
+      `bulk_${action}`,
+      null,
+      `Bulk ${action} on ${ids.length} product(s): ${ids.join(', ')}`,
+    );
   }
 
   async removeImage(imageId: number) {

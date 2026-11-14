@@ -1,3 +1,4 @@
+import { ActivityLogService } from '../activity-log/activity-log.service.js';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Brackets, Not, Repository } from 'typeorm';
@@ -19,6 +20,7 @@ export class CustomersAdminService {
     private readonly customers: Repository<Customer>,
     @InjectRepository(Order)
     private readonly orders: Repository<Order>,
+    private readonly activity: ActivityLogService,
   ) {}
 
   private async stats(ids: number[]) {
@@ -158,6 +160,13 @@ export class CustomersAdminService {
       ...(await this.fields(dto)),
       updatedAt: new Date(),
     });
+    if (dto.password) {
+      await this.activity.record(
+        'password_set',
+        { model: 'Customer', id, label: dto.name },
+        `Set a login password for customer "${dto.name}"`,
+      );
+    }
     return this.findOne(id);
   }
 

@@ -10,7 +10,9 @@ import { ProductPresenterService } from '../catalog/product-presenter.service.js
 import { laravelPaginated, positiveInt } from '../common/laravel-pagination.js';
 import type { Customer } from '../customers/customer.entity.js';
 import { OrderItem } from '../orders/order-item.entity.js';
+import { OrderStatusHistory } from '../orders/order-status-history.entity.js';
 import { Order } from '../orders/order.entity.js';
+import { iso8601 } from '../common/iso-date.js';
 import { Product } from '../products/product.entity.js';
 import { Review } from '../reviews/review.entity.js';
 import { Wishlist } from '../wishlist/wishlist.entity.js';
@@ -24,6 +26,8 @@ export class AccountService {
     private readonly orders: Repository<Order>,
     @InjectRepository(OrderItem)
     private readonly orderItems: Repository<OrderItem>,
+    @InjectRepository(OrderStatusHistory)
+    private readonly statusHistories: Repository<OrderStatusHistory>,
     @InjectRepository(Product)
     private readonly products: Repository<Product>,
     @InjectRepository(Wishlist)
@@ -72,6 +76,48 @@ export class AccountService {
       .filter((id): id is number => id !== null);
     const images = await this.presenter.imagesFor([...new Set(productIds)]);
     return presentOrder(order, items, images);
+  }
+
+  /**
+   * Guest tracking. Both the order number and the customer's phone must match;
+   * either mismatch gets the same 404 so the endpoint doesn't confirm which
+   * order numbers exist. Phones compare on their last 10 digits, so
+   * 01686586914, +8801686586914 and 8801686586914 are the same number.
+   */
+  async trackOrder(orderNumber: string, phone: string) {
+    const notFound = new NotFoundException({
+      message: 'No order found with that order number and phone.',
+    });
+    const order = await this.orders.findOne({
+      where: { orderNumber: orderNumber.trim().toUpperCase() },
+      relations: { customer: true },
+    });
+    const last10 = (value: string) => value.replace(/\D/g, '').slice(-10);
+    if (
+      !order?.customer?.phone ||
+      last10(phone).length < 10 ||
+      last10(order.customer.phone) !== last10(phone)
+    )
+      throw notFound;
+
+    const history = await this.statusHistories.find({
+      where: { orderId: order.id },
+      order: { createdAt: 'ASC', id: 'ASC' },
+    });
+    // The delivery address stays out: the order number + phone pair is not a login.
+    const { shipping_address: _address, ...presented } =
+      await this.orderWithItems(order);
+    void _address;
+    return {
+      data: {
+        ...presented,
+        // Admin notes can be internal, so only the status and when it changed.
+        status_history: history.map((entry) => ({
+          status: entry.status,
+          created_at: iso8601(entry.createdAt),
+        })),
+      },
+    };
   }
 
   // ------------------------------------------------------------------ wishlist

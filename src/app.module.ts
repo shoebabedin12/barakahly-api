@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { type MiddlewareConsumer, Module, type NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
@@ -6,6 +6,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AdminAuthModule } from './admin-auth/admin-auth.module.js';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
+import { BlogModule } from './blog/blog.module.js';
 import { BrandsModule } from './brands/brands.module.js';
 import { CategoriesModule } from './categories/categories.module.js';
 import { CategoryLandingsModule } from './category-landings/category-landings.module.js';
@@ -13,8 +14,10 @@ import { CartModule } from './cart/cart.module.js';
 import { CatalogModule } from './catalog/catalog.module.js';
 import { LaravelTimestampsSubscriber } from './database/laravel-timestamps.subscriber.js';
 import { AppThrottlerGuard } from './common/app-throttler.guard.js';
+import { requestContextMiddleware } from './common/request-context.js';
 import { CustomerAuthModule } from './customer-auth/customer-auth.module.js';
 import { AccountModule } from './account/account.module.js';
+import { ActivityLogModule } from './activity-log/activity-log.module.js';
 import { CheckoutModule } from './checkout/checkout.module.js';
 import { ColorsModule } from './colors/colors.module.js';
 import { DashboardModule } from './dashboard/dashboard.module.js';
@@ -22,9 +25,12 @@ import { NewsletterModule } from './newsletter/newsletter.module.js';
 import { OrdersModule } from './orders/orders.module.js';
 import { PagesModule } from './pages/pages.module.js';
 import { ProductsModule } from './products/products.module.js';
+import { ReportsModule } from './reports/reports.module.js';
 import { SettingsModule } from './settings/settings.module.js';
 import { SizesModule } from './sizes/sizes.module.js';
 import { FeedsModule } from './feeds/feeds.module.js';
+import { InventoryModule } from './inventory/inventory.module.js';
+import { StaffModule } from './staff/staff.module.js';
 import { StoreAdminModule } from './store-admin/store-admin.module.js';
 
 @Module({
@@ -77,8 +83,17 @@ import { StoreAdminModule } from './store-admin/store-admin.module.js';
     OrdersModule,
     StoreAdminModule,
     FeedsModule,
+    InventoryModule,
+    ActivityLogModule,
+    BlogModule,
+    StaffModule,
+    ReportsModule,
   ],
   controllers: [AppController],
   providers: [AppService, { provide: APP_GUARD, useClass: AppThrottlerGuard }],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(requestContextMiddleware).forRoutes('*');
+  }
+}

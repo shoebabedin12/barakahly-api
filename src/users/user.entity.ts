@@ -35,4 +35,10 @@ export class User {
   // Never selected by default - mirrors Laravel's $hidden = ['password', ...].
   @Column({ type: 'varchar', select: false })
   password: string;
+
+  @Column({ name: 'two_factor_enabled_at', type: 'timestamp', nullable: true })
+  twoFactorEnabledAt: Date | null;
+
+  @Column({ name: 'created_at', type: 'timestamp', nullable: true })
+  createdAt: Date | null;
 }

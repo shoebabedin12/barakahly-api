@@ -7,6 +7,7 @@ import { User } from '../users/user.entity.js';
 import { AdminAuthController } from './admin-auth.controller.js';
 import { AdminAuthService } from './admin-auth.service.js';
 import { AdminJwtGuard } from './guards/admin-jwt.guard.js';
+import { SuperAdminGuard } from './guards/super-admin.guard.js';
 
 @Module({
   imports: [
@@ -21,7 +22,8 @@ import { AdminJwtGuard } from './guards/admin-jwt.guard.js';
     }),
   ],
   controllers: [AdminAuthController],
-  providers: [AdminAuthService, AdminJwtGuard],
-  exports: [AdminJwtGuard, JwtModule],
+  providers: [AdminAuthService, AdminJwtGuard, SuperAdminGuard],
+  // TypeOrmModule so every module using AdminJwtGuard can inject its User repository.
+  exports: [AdminJwtGuard, SuperAdminGuard, JwtModule, TypeOrmModule],
 })
 export class AdminAuthModule {}

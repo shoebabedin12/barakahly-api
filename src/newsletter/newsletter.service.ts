@@ -32,6 +32,8 @@ export class NewsletterService {
           status: true,
           source: 'Website',
           subscribedAt: new Date(),
+          // insert() skips the timestamps subscriber, so stamp it here.
+          createdAt: new Date(),
         }),
       );
     }

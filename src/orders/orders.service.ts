@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
+import { ActivityLogService } from '../activity-log/activity-log.service.js';
+import { ProductVariant } from '../products/product-variant.entity.js';
 import { Product } from '../products/product.entity.js';
 import type { OrderListQuery } from './dto/order-query.dto.js';
 import { OrderItem } from './order-item.entity.js';
@@ -18,6 +20,7 @@ export class OrdersService {
     private readonly statusHistories: Repository<OrderStatusHistory>,
     @InjectRepository(Product) private readonly products: Repository<Product>,
     private readonly dataSource: DataSource,
+    private readonly activity: ActivityLogService,
   ) {}
 
   async findAll(query: OrderListQuery) {
@@ -126,27 +129,35 @@ export class OrdersService {
     if (!order) throw new NotFoundException('Order not found.');
 
     await this.dataSource.transaction((manager) => this.applyStatusChange(manager, order, newStatus));
+    await this.recordStatusChange(order, newStatus);
 
     return this.findOne(id);
   }
 
   async bulkUpdateStatus(ids: number[], newStatus: Order['orderStatus']) {
-    const targets = await this.orders.find({ where: {} });
-    const matched = targets.filter((o) => ids.includes(o.id));
+    const matched = ids.length ? await this.orders.find({ where: { id: In(ids) } }) : [];
 
     await this.dataSource.transaction(async (manager) => {
       for (const order of matched) {
         await this.applyStatusChange(manager, order, newStatus);
       }
     });
+    for (const order of matched) await this.recordStatusChange(order, newStatus);
 
     return { updated: matched.length };
   }
 
-  /** Mirrors OrderController::applyStatusChange() exactly, including that
-   * stock is always restored on the base Product (never the variant),
-   * even for items originally sold as a variant - that's how Laravel
-   * does it, so this keeps parity rather than "fixing" it silently. */
+  private recordStatusChange(order: Order, newStatus: Order['orderStatus']) {
+    return this.activity.record(
+      'status_changed',
+      { model: 'Order', id: order.id, label: order.orderNumber },
+      `Changed order ${order.orderNumber} status from "${order.orderStatus}" to "${newStatus}"`,
+    );
+  }
+
+  /** OrderController::applyStatusChange(). Cancelling puts the stock back
+   * where checkout took it from - the variant for variant lines (Laravel
+   * always restored the base product, leaving variant stock short). */
   private async applyStatusChange(
     manager: import('typeorm').EntityManager,
     order: Order,
@@ -157,7 +168,9 @@ export class OrdersService {
     if (oldStatus !== 'cancelled' && newStatus === 'cancelled') {
       const items = await manager.find(OrderItem, { where: { orderId: order.id } });
       for (const item of items) {
-        if (item.productId) {
+        if (item.productVariantId) {
+          await manager.increment(ProductVariant, { id: item.productVariantId }, 'stock', item.quantity);
+        } else if (item.productId) {
           await manager.increment(Product, { id: item.productId }, 'stock', item.quantity);
         }
       }
@@ -175,6 +188,11 @@ export class OrdersService {
     if (!order) throw new NotFoundException('Order not found.');
 
     await this.orders.update(id, { paymentStatus: newStatus });
+    await this.activity.record(
+      'payment_status_changed',
+      { model: 'Order', id: order.id, label: order.orderNumber },
+      `Changed order ${order.orderNumber} payment status from "${order.paymentStatus}" to "${newStatus}"`,
+    );
     return this.findOne(id);
   }
 
@@ -184,6 +202,11 @@ export class OrdersService {
 
     const newTotal = Number(order.totalAmount) - Number(order.shippingCharge);
     await this.orders.update(id, { totalAmount: String(newTotal), shippingCharge: '0.00' });
+    await this.activity.record(
+      'shipping_charge_removed',
+      { model: 'Order', id: order.id, label: order.orderNumber },
+      `Removed ৳${order.shippingCharge} delivery charge from order ${order.orderNumber}`,
+    );
 
     return this.findOne(id);
   }
@@ -230,6 +253,11 @@ export class OrdersService {
       });
     });
 
+    await this.activity.record(
+      'merged',
+      { model: 'Order', id: order.id, label: order.orderNumber },
+      `Merged order ${secondary.orderNumber} into order ${order.orderNumber}`,
+    );
     return this.findOne(orderId);
   }
 }

@@ -10,4 +10,7 @@ export class Role {
 
   @Column({ type: 'varchar', unique: true })
   slug: string;
+
+  @Column({ name: 'created_at', type: 'timestamp', nullable: true })
+  createdAt: Date | null;
 }

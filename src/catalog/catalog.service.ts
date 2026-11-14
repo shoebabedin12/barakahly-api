@@ -340,7 +340,11 @@ export class CatalogService {
         average_rating: stat.average,
         reviews_count: stat.count,
         category: product.category
-          ? { id: product.category.id, name: product.category.name }
+          ? {
+              id: product.category.id,
+              name: product.category.name,
+              slug: product.category.slug,
+            }
           : null,
         brand: product.brand
           ? { id: product.brand.id, name: product.brand.name }
