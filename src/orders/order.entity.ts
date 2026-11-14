@@ -51,6 +51,12 @@ export class Order {
   @Column({ name: 'transaction_id', type: 'varchar', nullable: true })
   transactionId: string | null;
 
+  @Column({ name: 'gateway_val_id', type: 'varchar', nullable: true })
+  gatewayValId: string | null;
+
+  @Column({ name: 'gateway_response', type: 'json', nullable: true })
+  gatewayResponse: Record<string, unknown> | null;
+
   @Column({ name: 'payment_date', type: 'date', nullable: true })
   paymentDate: string | null;
 

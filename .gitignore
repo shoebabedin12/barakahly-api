@@ -10,3 +10,6 @@ coverage/
 # Local env backups (contain secrets)
 .env.*
 !.env.example
+
+# Web push key pair, generated on first use (see src/push/push.service.ts)
+.vapid-keys.json

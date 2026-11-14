@@ -14,13 +14,16 @@ const MAX_SIZE_BYTES = 2048 * 1024; // 2048 KB, same limit as product images
  */
 export function colorImageMulterOptions(): MulterOptions {
   const destination =
-    process.env.LARAVEL_COLOR_STORAGE_PATH ?? '../barakahly-commerce/storage/app/public/colors';
+    process.env.LARAVEL_COLOR_STORAGE_PATH ?? '../storage/colors';
 
   return {
     storage: diskStorage({
       destination,
       filename: (_req, file, callback) => {
-        callback(null, `${randomUUID()}${extname(file.originalname).toLowerCase()}`);
+        callback(
+          null,
+          `${randomUUID()}${extname(file.originalname).toLowerCase()}`,
+        );
       },
     }),
     limits: { fileSize: MAX_SIZE_BYTES },

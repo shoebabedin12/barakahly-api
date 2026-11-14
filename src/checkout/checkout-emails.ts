@@ -140,3 +140,34 @@ export function newOrderAdminEmail(
               <p style="margin:24px 0 0;">${escape(siteName)}</p>`,
   );
 }
+
+/** emails.abandoned-cart - one reminder to a verified guest who never ordered. */
+export function abandonedCartEmail(
+  siteName: string,
+  name: string | null,
+  lines: { name: string; quantity: number; subtotal: number }[],
+  total: string | number,
+  cartUrl: string,
+) {
+  const rows = lines
+    .map(
+      (line) => `<tr>
+        <td style="padding:10px 0; border-bottom:1px solid #eee; font-size:14px;">${escape(line.name)} &times; ${line.quantity}</td>
+        <td style="padding:10px 0; border-bottom:1px solid #eee; font-size:14px; text-align:right;">${money(line.subtotal)}</td>
+      </tr>`,
+    )
+    .join('');
+  return layout(
+    siteName,
+    `              <p style="margin:0 0 16px;">Hi${name ? ` ${escape(name)}` : ''},</p>
+              <p style="margin:0 0 20px;">You left some great items in your cart. They're still waiting for you!</p>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; margin-bottom:20px;">
+                ${rows}
+                <tr>
+                  <td style="padding:12px 0 0; font-weight:bold;">Total</td>
+                  <td style="padding:12px 0 0; font-weight:bold; text-align:right;">${money(total)}</td>
+                </tr>
+              </table>
+              ${button(cartUrl, 'Complete Your Order')}`,
+  );
+}

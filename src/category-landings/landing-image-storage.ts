@@ -14,20 +14,27 @@ const MAX_SIZE_BYTES = 4096 * 1024; // banners are wider than product shots
  */
 export function landingImageMulterOptions(): MulterOptions {
   const destination =
-    process.env.LARAVEL_CATEGORY_LANDING_STORAGE_PATH || '../Barakahly/storage/app/public/category-landings';
+    process.env.LARAVEL_CATEGORY_LANDING_STORAGE_PATH ||
+    '../storage/category-landings';
 
   return {
     storage: diskStorage({
       destination,
       filename: (_req, file, callback) => {
-        callback(null, `${randomUUID()}${extname(file.originalname).toLowerCase()}`);
+        callback(
+          null,
+          `${randomUUID()}${extname(file.originalname).toLowerCase()}`,
+        );
       },
     }),
     limits: { fileSize: MAX_SIZE_BYTES },
     fileFilter: (_req, file, callback) => {
       const ext = extname(file.originalname).toLowerCase();
       if (!ALLOWED_EXTENSIONS.has(ext)) {
-        callback(new BadRequestException('Image must be a JPG, PNG or WebP file.'), false);
+        callback(
+          new BadRequestException('Image must be a JPG, PNG or WebP file.'),
+          false,
+        );
         return;
       }
       callback(null, true);

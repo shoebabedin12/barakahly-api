@@ -15,6 +15,8 @@ import { User } from '../../users/user.entity.js';
 export interface AdminJwtPayload {
   sub: number;
   email: string;
+  /** Set only on 2FA step tokens, which must never work as a session. */
+  purpose?: string;
   /** Filled in by the guard from the database, not taken from the token. */
   roleSlug?: string;
 }
@@ -45,6 +47,9 @@ export class AdminJwtGuard implements CanActivate {
     try {
       payload = await this.jwt.verifyAsync<AdminJwtPayload>(token);
     } catch {
+      throw new UnauthorizedException('Invalid or expired token.');
+    }
+    if (payload.purpose) {
       throw new UnauthorizedException('Invalid or expired token.');
     }
 

@@ -10,6 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { AdminJwtGuard } from '../admin-auth/guards/admin-jwt.guard.js';
+import { CreateOrderDto } from './dto/create-order.dto.js';
 import type { OrderListQuery } from './dto/order-query.dto.js';
 import {
   BulkUpdateOrderStatusDto,
@@ -44,13 +45,27 @@ export class OrdersController {
     return this.ordersService.findAll(query);
   }
 
+  // Declared before ':id' so "create-options" isn't parsed as an order id.
+  @Get('create-options')
+  createOptions() {
+    return this.ordersService.createOptions();
+  }
+
+  @Post()
+  create(@Body() dto: CreateOrderDto) {
+    return this.ordersService.createCustom(dto);
+  }
+
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.ordersService.findOne(id);
   }
 
   @Patch(':id/status')
-  updateStatus(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateOrderStatusDto) {
+  updateStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateOrderStatusDto,
+  ) {
     return this.ordersService.updateStatus(id, dto.orderStatus);
   }
 
@@ -60,7 +75,10 @@ export class OrdersController {
   }
 
   @Patch(':id/payment-status')
-  updatePaymentStatus(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdatePaymentStatusDto) {
+  updatePaymentStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdatePaymentStatusDto,
+  ) {
     return this.ordersService.updatePaymentStatus(id, dto.paymentStatus);
   }
 

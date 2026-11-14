@@ -1,8 +1,18 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
 import { ActivityLogService } from '../activity-log/activity-log.service.js';
+import { Customer } from '../customers/customer.entity.js';
+import { PaymentMethod } from '../payment-methods/payment-method.entity.js';
+import { payLinkUrl } from '../payments/pay-link.js';
 import { ProductVariant } from '../products/product-variant.entity.js';
+import { ShippingZone } from '../shipping-zones/shipping-zone.entity.js';
+import type { CreateOrderDto } from './dto/create-order.dto.js';
 import { Product } from '../products/product.entity.js';
 import type { OrderListQuery } from './dto/order-query.dto.js';
 import { OrderItem } from './order-item.entity.js';
@@ -15,7 +25,8 @@ const PER_PAGE = 15;
 export class OrdersService {
   constructor(
     @InjectRepository(Order) private readonly orders: Repository<Order>,
-    @InjectRepository(OrderItem) private readonly orderItems: Repository<OrderItem>,
+    @InjectRepository(OrderItem)
+    private readonly orderItems: Repository<OrderItem>,
     @InjectRepository(OrderStatusHistory)
     private readonly statusHistories: Repository<OrderStatusHistory>,
     @InjectRepository(Product) private readonly products: Repository<Product>,
@@ -39,7 +50,9 @@ export class OrdersService {
       qb.andWhere('order.orderStatus = :status', { status: query.status });
     }
     if (query.paymentStatus) {
-      qb.andWhere('order.paymentStatus = :paymentStatus', { paymentStatus: query.paymentStatus });
+      qb.andWhere('order.paymentStatus = :paymentStatus', {
+        paymentStatus: query.paymentStatus,
+      });
     }
     if (query.search) {
       qb.andWhere(
@@ -49,7 +62,9 @@ export class OrdersService {
       );
     }
     if (query.dateFrom) {
-      qb.andWhere('DATE(order.createdAt) >= :dateFrom', { dateFrom: query.dateFrom });
+      qb.andWhere('DATE(order.createdAt) >= :dateFrom', {
+        dateFrom: query.dateFrom,
+      });
     }
     if (query.dateTo) {
       qb.andWhere('DATE(order.createdAt) <= :dateTo', { dateTo: query.dateTo });
@@ -61,23 +76,29 @@ export class OrdersService {
 
     return {
       data,
-      meta: { page, perPage: PER_PAGE, total, lastPage: Math.max(1, Math.ceil(total / PER_PAGE)) },
+      meta: {
+        page,
+        perPage: PER_PAGE,
+        total,
+        lastPage: Math.max(1, Math.ceil(total / PER_PAGE)),
+      },
       stats: orderStats,
     };
   }
 
   private async getStats() {
-    const [total, pending, processing, shipped, delivered, cancelled] = await Promise.all([
-      this.orders.count(),
-      this.orders.count({ where: { orderStatus: 'pending' } }),
-      this.orders.count({ where: { orderStatus: 'processing' } }),
-      this.orders.count({ where: { orderStatus: 'shipped' } }),
-      this.orders.count({ where: { orderStatus: 'delivered' } }),
-      this.orders.count({ where: { orderStatus: 'cancelled' } }),
-    ]);
+    const [total, pending, processing, shipped, delivered, cancelled] =
+      await Promise.all([
+        this.orders.count(),
+        this.orders.count({ where: { orderStatus: 'pending' } }),
+        this.orders.count({ where: { orderStatus: 'processing' } }),
+        this.orders.count({ where: { orderStatus: 'shipped' } }),
+        this.orders.count({ where: { orderStatus: 'delivered' } }),
+        this.orders.count({ where: { orderStatus: 'cancelled' } }),
+      ]);
 
     const [{ today }] = await this.orders.manager.query(
-      "SELECT COUNT(*) as today FROM orders WHERE DATE(created_at) = CURDATE()",
+      'SELECT COUNT(*) as today FROM orders WHERE DATE(created_at) = CURDATE()',
     );
     const [{ this_month: thisMonth }] = await this.orders.manager.query(
       'SELECT COUNT(*) as this_month FROM orders WHERE MONTH(created_at) = MONTH(CURDATE()) AND YEAR(created_at) = YEAR(CURDATE())',
@@ -114,35 +135,265 @@ export class OrdersService {
 
     let mergeCandidates: Order[] = [];
 
-    if (order.customerId && order.paymentStatus === 'pending' && order.orderStatus !== 'cancelled') {
+    if (
+      order.customerId &&
+      order.paymentStatus === 'pending' &&
+      order.orderStatus !== 'cancelled'
+    ) {
       mergeCandidates = await this.orders.find({
         where: { customerId: order.customerId, paymentStatus: 'pending' },
       });
-      mergeCandidates = mergeCandidates.filter((o) => o.id !== order.id && o.orderStatus !== 'cancelled');
+      mergeCandidates = mergeCandidates.filter(
+        (o) => o.id !== order.id && o.orderStatus !== 'cancelled',
+      );
     }
 
-    return { order, mergeCandidates };
+    // Orders created in the panel with online payment get a link to send the customer.
+    const payLink =
+      order.paymentGateway === 'sslcommerz' &&
+      order.paymentStatus !== 'paid' &&
+      order.orderStatus !== 'cancelled'
+        ? payLinkUrl(order.orderNumber)
+        : null;
+
+    return { order, mergeCandidates, payLink };
+  }
+
+  /** What the "Create order" form needs: active products with their variants, methods, zones. */
+  async createOptions() {
+    const [products, paymentMethods, shippingZones] = await Promise.all([
+      this.products.find({
+        where: { status: true },
+        relations: { variants: { color: true, size: true } },
+        order: { name: 'ASC' },
+      }),
+      this.dataSource
+        .getRepository(PaymentMethod)
+        .find({
+          where: { status: true },
+          order: { sortOrder: 'ASC', id: 'ASC' },
+        }),
+      this.dataSource
+        .getRepository(ShippingZone)
+        .find({ where: { status: true }, order: { id: 'ASC' } }),
+    ]);
+    return {
+      products: products.map((product) => ({
+        id: product.id,
+        name: product.name,
+        sku: product.sku,
+        price: Number(product.discountPrice ?? product.price),
+        stock: product.stock,
+        variants: (product.variants ?? [])
+          .filter((variant) => variant.status)
+          .map((variant) => ({
+            id: variant.id,
+            label:
+              [variant.color?.name, variant.size?.name]
+                .filter(Boolean)
+                .join(' / ') ||
+              variant.sku ||
+              `Variant ${variant.id}`,
+            price: Number(
+              variant.discountPrice ??
+                variant.price ??
+                product.discountPrice ??
+                product.price,
+            ),
+            stock: variant.stock,
+          })),
+      })),
+      paymentMethods: paymentMethods.map((m) => ({
+        id: m.id,
+        name: m.name,
+        code: m.code,
+      })),
+      shippingZones: shippingZones.map((z) => ({
+        id: z.id,
+        name: z.name,
+        charge: Number(z.charge),
+      })),
+    };
+  }
+
+  /**
+   * Admin\OrderController@store: an order taken over the phone/WhatsApp. Finds
+   * or creates the customer by phone (an existing account's name and email are
+   * left alone), takes stock exactly like checkout does - variant-aware and
+   * never below zero - and logs it.
+   */
+  async createCustom(dto: CreateOrderDto) {
+    const unprocessable = (message: string) =>
+      new UnprocessableEntityException({ message });
+
+    const paymentMethod = await this.dataSource
+      .getRepository(PaymentMethod)
+      .findOneBy({ id: dto.paymentMethodId });
+    if (!paymentMethod) throw unprocessable('Please choose a payment method.');
+
+    const zone = dto.shippingZoneId
+      ? await this.dataSource
+          .getRepository(ShippingZone)
+          .findOneBy({ id: dto.shippingZoneId })
+      : null;
+    if (dto.shippingZoneId && !zone)
+      throw unprocessable('Please choose a valid shipping zone.');
+    const shipping = dto.shippingCharge ?? (zone ? Number(zone.charge) : 0);
+
+    const orderId = await this.dataSource.transaction(async (manager) => {
+      const lines: {
+        product: Product;
+        variant: ProductVariant | null;
+        quantity: number;
+        price: number;
+      }[] = [];
+      for (const item of dto.items) {
+        const product = await manager.findOneBy(Product, {
+          id: item.productId,
+        });
+        if (!product)
+          throw unprocessable('A selected product no longer exists.');
+        const variant = item.variantId
+          ? await manager.findOne(ProductVariant, {
+              where: { id: item.variantId, productId: product.id },
+              relations: { color: true, size: true },
+            })
+          : null;
+        if (item.variantId && !variant)
+          throw unprocessable(
+            `Please choose a valid option for ${product.name}.`,
+          );
+        lines.push({
+          product,
+          variant,
+          quantity: item.quantity,
+          price: item.price,
+        });
+      }
+
+      const phone = dto.customerPhone.trim();
+      let customer = await manager.findOneBy(Customer, { phone });
+      if (customer) {
+        if (!customer.address)
+          await manager.update(Customer, customer.id, {
+            address: dto.shippingAddress,
+          });
+      } else {
+        // customers.email is unique: keep the email off if another account already uses it.
+        const email = dto.customerEmail?.trim() || null;
+        const emailTaken = email
+          ? await manager.existsBy(Customer, { email })
+          : false;
+        customer = await manager.save(
+          manager.create(Customer, {
+            name: dto.customerName.trim(),
+            phone,
+            email: emailTaken ? null : email,
+            address: dto.shippingAddress,
+            status: true,
+          }),
+        );
+      }
+
+      const subtotal = lines.reduce(
+        (sum, line) => sum + line.price * line.quantity,
+        0,
+      );
+      const base = `ORD-${Math.floor(Date.now() / 1000)}`;
+      let orderNumber = base;
+      for (let n = 2; await manager.existsBy(Order, { orderNumber }); n++)
+        orderNumber = `${base}-${n}`;
+
+      const notes = dto.notes?.trim();
+      const order = await manager.save(
+        manager.create(Order, {
+          customerId: customer.id,
+          orderNumber,
+          shippingZoneId: zone?.id ?? null,
+          subtotal: subtotal.toFixed(2),
+          shippingCharge: shipping.toFixed(2),
+          discountAmount: '0.00',
+          totalAmount: (subtotal + shipping).toFixed(2),
+          paymentMethodId: paymentMethod.id,
+          paymentMethod: paymentMethod.name,
+          paymentGateway: paymentMethod.code,
+          paymentStatus: 'pending',
+          orderStatus: 'pending',
+          shippingAddress:
+            dto.shippingAddress + (notes ? `\n\nNote: ${notes}` : ''),
+        }),
+      );
+
+      for (const line of lines) {
+        await manager.save(
+          manager.create(OrderItem, {
+            orderId: order.id,
+            productId: line.product.id,
+            productVariantId: line.variant?.id ?? null,
+            productName: line.product.name,
+            variantColor: line.variant?.color?.name ?? null,
+            variantSize: line.variant?.size?.name ?? null,
+            price: line.price.toFixed(2),
+            quantity: line.quantity,
+            subtotal: (line.price * line.quantity).toFixed(2),
+          }),
+        );
+        const result = await manager
+          .createQueryBuilder()
+          .update(line.variant ? ProductVariant : Product)
+          .set({ stock: () => `stock - ${Number(line.quantity)}` })
+          .where('id = :id', { id: line.variant?.id ?? line.product.id })
+          .andWhere('stock >= :quantity', { quantity: line.quantity })
+          .execute();
+        if (!result.affected)
+          throw unprocessable(
+            `${line.product.name} does not have enough stock.`,
+          );
+      }
+
+      await manager.save(
+        manager.create(OrderStatusHistory, {
+          orderId: order.id,
+          status: 'pending',
+          createdAt: new Date(),
+        }),
+      );
+      return order.id;
+    });
+
+    const created = await this.orders.findOneByOrFail({ id: orderId });
+    await this.activity.record(
+      'created',
+      { model: 'Order', id: created.id, label: created.orderNumber },
+      `Created custom order ${created.orderNumber}`,
+    );
+    return this.findOne(orderId);
   }
 
   async updateStatus(id: number, newStatus: Order['orderStatus']) {
     const order = await this.orders.findOne({ where: { id } });
     if (!order) throw new NotFoundException('Order not found.');
 
-    await this.dataSource.transaction((manager) => this.applyStatusChange(manager, order, newStatus));
+    await this.dataSource.transaction((manager) =>
+      this.applyStatusChange(manager, order, newStatus),
+    );
     await this.recordStatusChange(order, newStatus);
 
     return this.findOne(id);
   }
 
   async bulkUpdateStatus(ids: number[], newStatus: Order['orderStatus']) {
-    const matched = ids.length ? await this.orders.find({ where: { id: In(ids) } }) : [];
+    const matched = ids.length
+      ? await this.orders.find({ where: { id: In(ids) } })
+      : [];
 
     await this.dataSource.transaction(async (manager) => {
       for (const order of matched) {
         await this.applyStatusChange(manager, order, newStatus);
       }
     });
-    for (const order of matched) await this.recordStatusChange(order, newStatus);
+    for (const order of matched)
+      await this.recordStatusChange(order, newStatus);
 
     return { updated: matched.length };
   }
@@ -166,18 +417,34 @@ export class OrdersService {
     const oldStatus = order.orderStatus;
 
     if (oldStatus !== 'cancelled' && newStatus === 'cancelled') {
-      const items = await manager.find(OrderItem, { where: { orderId: order.id } });
+      const items = await manager.find(OrderItem, {
+        where: { orderId: order.id },
+      });
       for (const item of items) {
         if (item.productVariantId) {
-          await manager.increment(ProductVariant, { id: item.productVariantId }, 'stock', item.quantity);
+          await manager.increment(
+            ProductVariant,
+            { id: item.productVariantId },
+            'stock',
+            item.quantity,
+          );
         } else if (item.productId) {
-          await manager.increment(Product, { id: item.productId }, 'stock', item.quantity);
+          await manager.increment(
+            Product,
+            { id: item.productId },
+            'stock',
+            item.quantity,
+          );
         }
       }
     }
 
     await manager.save(
-      manager.create(OrderStatusHistory, { orderId: order.id, status: newStatus, createdAt: new Date() }),
+      manager.create(OrderStatusHistory, {
+        orderId: order.id,
+        status: newStatus,
+        createdAt: new Date(),
+      }),
     );
 
     await manager.update(Order, order.id, { orderStatus: newStatus });
@@ -201,7 +468,10 @@ export class OrdersService {
     if (!order) throw new NotFoundException('Order not found.');
 
     const newTotal = Number(order.totalAmount) - Number(order.shippingCharge);
-    await this.orders.update(id, { totalAmount: String(newTotal), shippingCharge: '0.00' });
+    await this.orders.update(id, {
+      totalAmount: String(newTotal),
+      shippingCharge: '0.00',
+    });
     await this.activity.record(
       'shipping_charge_removed',
       { model: 'Order', id: order.id, label: order.orderNumber },
@@ -215,21 +485,32 @@ export class OrdersService {
     const order = await this.orders.findOne({ where: { id: orderId } });
     if (!order) throw new NotFoundException('Order not found.');
 
-    const secondary = await this.orders.findOne({ where: { id: mergeOrderId } });
+    const secondary = await this.orders.findOne({
+      where: { id: mergeOrderId },
+    });
     if (!secondary) throw new NotFoundException('Order to merge not found.');
 
     if (secondary.id === order.id) {
       throw new BadRequestException('Cannot merge an order with itself.');
     }
     if (secondary.customerId !== order.customerId) {
-      throw new BadRequestException('Can only merge orders placed by the same customer.');
+      throw new BadRequestException(
+        'Can only merge orders placed by the same customer.',
+      );
     }
-    if (order.paymentStatus !== 'pending' || secondary.paymentStatus !== 'pending') {
+    if (
+      order.paymentStatus !== 'pending' ||
+      secondary.paymentStatus !== 'pending'
+    ) {
       throw new BadRequestException('Only unpaid orders can be merged.');
     }
 
     await this.dataSource.transaction(async (manager) => {
-      await manager.update(OrderItem, { orderId: secondary.id }, { orderId: order.id });
+      await manager.update(
+        OrderItem,
+        { orderId: secondary.id },
+        { orderId: order.id },
+      );
 
       const newSubtotal = await manager
         .createQueryBuilder(OrderItem, 'item')
@@ -241,7 +522,11 @@ export class OrdersService {
 
       await manager.update(Order, order.id, {
         subtotal: String(subtotal),
-        totalAmount: String(subtotal - Number(order.discountAmount) + Number(order.shippingCharge)),
+        totalAmount: String(
+          subtotal -
+            Number(order.discountAmount) +
+            Number(order.shippingCharge),
+        ),
       });
 
       await manager.update(Order, secondary.id, {

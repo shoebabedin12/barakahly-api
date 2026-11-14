@@ -6,8 +6,10 @@ import { Coupon } from '../coupons/coupon.entity.js';
 import { CustomerTokensModule } from '../customer-auth/customer-tokens.module.js';
 import { MailModule } from '../mail/mail.module.js';
 import { PaymentMethod } from '../payment-methods/payment-method.entity.js';
+import { PushModule } from '../push/push.module.js';
 import { Setting } from '../settings/setting.entity.js';
 import { ShippingZone } from '../shipping-zones/shipping-zone.entity.js';
+import { AbandonedCartReminderService } from './abandoned-cart-reminder.service.js';
 import { AbandonedCart } from './abandoned-cart.entity.js';
 import { CheckoutOtp } from './checkout-otp.entity.js';
 import { CheckoutController } from './checkout.controller.js';
@@ -28,8 +30,10 @@ import { PlaceOrderService } from './place-order.service.js';
     CustomerTokensModule,
     AccountModule,
     MailModule,
+    PushModule,
   ],
   controllers: [CheckoutController],
-  providers: [CheckoutService, PlaceOrderService],
+  providers: [CheckoutService, PlaceOrderService, AbandonedCartReminderService],
+  exports: [PlaceOrderService],
 })
 export class CheckoutModule {}

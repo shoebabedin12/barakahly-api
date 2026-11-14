@@ -24,7 +24,7 @@ export function publicStorageRoot() {
   if (process.env.PUBLIC_STORAGE_PATH) return process.env.PUBLIC_STORAGE_PATH;
   if (process.env.LARAVEL_PUBLIC_STORAGE_PATH)
     return dirname(process.env.LARAVEL_PUBLIC_STORAGE_PATH);
-  return '../Barakahly/storage/app/public';
+  return '../storage';
 }
 
 /** Multer options writing images to `<root>/<folder>/<uuid>.<ext>`. */

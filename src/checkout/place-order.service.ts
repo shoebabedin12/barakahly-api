@@ -21,6 +21,7 @@ import { passwordErrors } from '../customer-auth/password-rules.js';
 import { SanctumTokenService } from '../customer-auth/sanctum-token.service.js';
 import { Customer } from '../customers/customer.entity.js';
 import { MailService } from '../mail/mail.service.js';
+import { PushService } from '../push/push.service.js';
 import { OrderItem } from '../orders/order-item.entity.js';
 import { Order } from '../orders/order.entity.js';
 import { PaymentMethod } from '../payment-methods/payment-method.entity.js';
@@ -67,6 +68,7 @@ export class PlaceOrderService {
     private readonly tokens: SanctumTokenService,
     private readonly account: AccountService,
     private readonly mail: MailService,
+    private readonly push: PushService,
   ) {}
 
   // -------------------------------------------------------------- verify token
@@ -468,8 +470,9 @@ export class PlaceOrderService {
     return { order: await this.account.orderWithItems(order), token: newToken };
   }
 
-  /** OrderNotificationService::sendOrderPlacedNotifications (email part). */
-  private async sendOrderPlacedNotifications(order: Order) {
+  /** OrderNotificationService::sendOrderPlacedNotifications. Also called by
+   * the SSLCommerz callback once an online payment is confirmed. */
+  async sendOrderPlacedNotifications(order: Order) {
     try {
       const items = await this.dataSource.getRepository(OrderItem).find({
         where: { orderId: order.id },
@@ -526,6 +529,12 @@ export class PlaceOrderService {
             ),
           );
       }
+
+      await this.push.sendToAll(
+        'New Order Received',
+        `Order ${order.orderNumber} — ৳${Number(order.totalAmount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        `${admin}/orders/${order.id}`,
+      );
     } catch (error) {
       this.logger.warn(
         `Order notifications failed: ${(error as Error).message}`,

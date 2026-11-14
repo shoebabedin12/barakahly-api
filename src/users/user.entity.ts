@@ -36,6 +36,23 @@ export class User {
   @Column({ type: 'varchar', select: false })
   password: string;
 
+  // Encrypted (see admin-auth/totp.ts); never selected unless asked for.
+  @Column({
+    name: 'two_factor_secret',
+    type: 'text',
+    nullable: true,
+    select: false,
+  })
+  twoFactorSecret: string | null;
+
+  @Column({
+    name: 'two_factor_recovery_codes',
+    type: 'text',
+    nullable: true,
+    select: false,
+  })
+  twoFactorRecoveryCodes: string | null;
+
   @Column({ name: 'two_factor_enabled_at', type: 'timestamp', nullable: true })
   twoFactorEnabledAt: Date | null;
 

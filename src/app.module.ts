@@ -19,6 +19,8 @@ import { CustomerAuthModule } from './customer-auth/customer-auth.module.js';
 import { AccountModule } from './account/account.module.js';
 import { ActivityLogModule } from './activity-log/activity-log.module.js';
 import { CheckoutModule } from './checkout/checkout.module.js';
+import { PaymentsModule } from './payments/payments.module.js';
+import { PushModule } from './push/push.module.js';
 import { ColorsModule } from './colors/colors.module.js';
 import { DashboardModule } from './dashboard/dashboard.module.js';
 import { NewsletterModule } from './newsletter/newsletter.module.js';
@@ -69,6 +71,8 @@ import { StoreAdminModule } from './store-admin/store-admin.module.js';
     CustomerAuthModule,
     AccountModule,
     CheckoutModule,
+    PaymentsModule,
+    PushModule,
     SettingsModule,
     NewsletterModule,
     PagesModule,
